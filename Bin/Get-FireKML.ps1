@@ -147,6 +147,40 @@ Write-Host ""
 # Convert GeoJSON ring to KML coordinates
 # ------------------------------------------------------------
 
+function ConvertTo-KmlText {
+    param (
+        [AllowNull()]
+        $Value
+    )
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return [System.Security.SecurityElement]::Escape(
+        [string]$Value
+    )
+}
+
+
+function ConvertTo-KmlDescriptionText {
+    param (
+        [AllowNull()]
+        $Value
+    )
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    # Descriptions contain HTML inside CDATA.  HTML-encode data values so
+    # upstream text is displayed as text instead of being interpreted as HTML.
+    return [System.Net.WebUtility]::HtmlEncode(
+        [string]$Value
+    )
+}
+
+
 function Convert-CoordinateRingToKml {
     param (
         [Parameter(Mandatory)]
@@ -197,6 +231,24 @@ switch ($geometry.type) {
 # Generate KML polygons
 # ------------------------------------------------------------
 
+$kmlFireName = ConvertTo-KmlText $fireName
+
+$descriptionFireName = ConvertTo-KmlDescriptionText $fireName
+$descriptionGisAcres = ConvertTo-KmlDescriptionText `
+    $properties.poly_GISAcres
+$descriptionContainment = ConvertTo-KmlDescriptionText `
+    $properties.attr_PercentContained
+$descriptionPerimeterDate = ConvertTo-KmlDescriptionText `
+    $properties.poly_PolygonDateTime
+$descriptionMapMethod = ConvertTo-KmlDescriptionText `
+    $properties.poly_MapMethod
+$descriptionSource = ConvertTo-KmlDescriptionText `
+    $properties.poly_Source
+$descriptionIncidentId = ConvertTo-KmlDescriptionText `
+    $properties.attr_UniqueFireIdentifier
+$descriptionIrwinId = ConvertTo-KmlDescriptionText `
+    $properties.poly_IRWINID
+
 $placemarkParts = @()
 
 foreach ($polygon in $polygons) {
@@ -226,17 +278,17 @@ foreach ($polygon in $polygons) {
     $placemarkParts += @"
         <Placemark>
 
-            <name>$fireName</name>
+            <name>$kmlFireName</name>
 
             <description><![CDATA[
-                <b>Fire:</b> $fireName<br>
-                <b>GIS Acres:</b> $($properties.poly_GISAcres)<br>
-                <b>Containment:</b> $($properties.attr_PercentContained)%<br>
-                <b>Perimeter Date:</b> $($properties.poly_PolygonDateTime)<br>
-                <b>Mapping Method:</b> $($properties.poly_MapMethod)<br>
-                <b>Source:</b> $($properties.poly_Source)<br>
-                <b>Incident ID:</b> $($properties.attr_UniqueFireIdentifier)<br>
-                <b>IRWIN ID:</b> $($properties.poly_IRWINID)<br>
+                <b>Fire:</b> $descriptionFireName<br>
+                <b>GIS Acres:</b> $descriptionGisAcres<br>
+                <b>Containment:</b> $descriptionContainment%<br>
+                <b>Perimeter Date:</b> $descriptionPerimeterDate<br>
+                <b>Mapping Method:</b> $descriptionMapMethod<br>
+                <b>Source:</b> $descriptionSource<br>
+                <b>Incident ID:</b> $descriptionIncidentId<br>
+                <b>IRWIN ID:</b> $descriptionIrwinId<br>
                 <b>Historical:</b> $Historical<br>
                 <b>Retrieved:</b> $(Get-Date)<br>
             ]]></description>
@@ -288,15 +340,15 @@ $kml = @"
 
     <Document>
 
-        <name>$fireName - $timestamp</name>
+        <name>$kmlFireName - $timestamp</name>
 
         <description><![CDATA[
-            <b>Fire:</b> $fireName<br>
-            <b>GIS Acres:</b> $($properties.poly_GISAcres)<br>
-            <b>Containment:</b> $($properties.attr_PercentContained)%<br>
-            <b>Perimeter Date:</b> $($properties.poly_PolygonDateTime)<br>
-            <b>Mapping Method:</b> $($properties.poly_MapMethod)<br>
-            <b>Source:</b> $($properties.poly_Source)<br>
+            <b>Fire:</b> $descriptionFireName<br>
+            <b>GIS Acres:</b> $descriptionGisAcres<br>
+            <b>Containment:</b> $descriptionContainment%<br>
+            <b>Perimeter Date:</b> $descriptionPerimeterDate<br>
+            <b>Mapping Method:</b> $descriptionMapMethod<br>
+            <b>Source:</b> $descriptionSource<br>
             <b>Retrieved:</b> $(Get-Date)<br>
         ]]></description>
 
