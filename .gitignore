@@ -1,0 +1,11 @@
+# Local/generated data
+Data/zipcodes.csv
+Output/
+
+# PowerShell/editor files
+*.tmp
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
