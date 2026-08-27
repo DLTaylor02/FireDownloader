@@ -1,4 +1,5 @@
 # FireDownloader
+<<<<<<< HEAD
 
 FireDownloader finds wildfires from the NIFC Wildfire API, downloads their geometry, and compiles that geometry into a `.kmz` file for use with applications such as Google Earth.
 
@@ -77,3 +78,6 @@ The tool downloads the national ZCTA dataset and maintains a local `zipcodes.csv
 
 - 2025 ZCTA Gazetteer
   https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2025_Gazetteer/
+=======
+Quickly find and get KMZ files for any fire in the US
+>>>>>>> a4465a4191134bc53f1277bf860f22c58782a7ff
