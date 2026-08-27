@@ -9,7 +9,7 @@ It also maintains a local cache of ZIP code coordinates and automatically refres
 Open PowerShell and execute:
 
 ```powershell
-.\Find-Fire.ps1
+.\Find_Fire.ps1
 ```
 
 The interactive tool will guide you through searching for fires and downloading their perimeters.
@@ -32,9 +32,6 @@ Downloaded `.kmz` files are placed in the `Output` folder.
     FireDownloader\
     │
     ├── Find-Fire.ps1              ← Launcher
-    │
-    ├── Backups\                   ← Previous versions of important scripts
-    │   └── *.ps1                  ← Discrete backup files
     │
     ├── Bin\
     │   ├── WildfireTool.ps1       ← Main application/menu
