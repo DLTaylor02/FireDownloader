@@ -26,6 +26,12 @@ if (-not (Test-Path $configFile)) {
 
 . $configFile
 
+$tempDirectory = $null
+$temporaryZipDatabase = $null
+$previousZipDatabase = $null
+
+try {
+
 # ------------------------------------------------------------
 # Prepare working directory
 # ------------------------------------------------------------
@@ -41,7 +47,7 @@ if (-not (Test-Path $dataDirectory)) {
 
 $tempDirectory = Join-Path `
     ([System.IO.Path]::GetTempPath()) `
-    "WildfireTools_ZCTA"
+    "WildfireTools_ZCTA_$([guid]::NewGuid().ToString('N'))"
 
 $tempZip = Join-Path `
     $tempDirectory `
@@ -50,14 +56,6 @@ $tempZip = Join-Path `
 $tempExtract = Join-Path `
     $tempDirectory `
     "Extracted"
-
-# Clean up any previous temporary data.
-if (Test-Path $tempDirectory) {
-    Remove-Item `
-        $tempDirectory `
-        -Recurse `
-        -Force
-}
 
 New-Item `
     -ItemType Directory `
@@ -179,34 +177,106 @@ if (-not $zipRecords -or $zipRecords.Count -eq 0) {
 # Write CSV
 # ------------------------------------------------------------
 
+$temporaryZipDatabase = Join-Path `
+    $dataDirectory `
+    ".zipcodes.$([guid]::NewGuid().ToString('N')).csv.tmp"
+
 $zipRecords |
     Sort-Object {
         [int]$_.ZIP
     } |
     Export-Csv `
-        -Path $zipDatabase `
+        -Path $temporaryZipDatabase `
         -NoTypeInformation `
         -Encoding UTF8
 
 # ------------------------------------------------------------
-# Validate output
+# Validate and replace the active ZIP database
 # ------------------------------------------------------------
+
+if (
+    -not (Test-Path $temporaryZipDatabase) -or
+    (Get-Item $temporaryZipDatabase).Length -eq 0
+) {
+
+    throw "The temporary ZIP database was not created successfully."
+}
+
+$validationRecords = @(
+    Import-Csv -Path $temporaryZipDatabase
+)
+
+if (
+    $validationRecords.Count -ne $zipRecords.Count -or
+    -not $validationRecords[0].PSObject.Properties.Name.Contains("ZIP") -or
+    -not $validationRecords[0].PSObject.Properties.Name.Contains("Latitude") -or
+    -not $validationRecords[0].PSObject.Properties.Name.Contains("Longitude")
+) {
+
+    throw "The temporary ZIP database failed validation."
+}
+
+if (Test-Path $zipDatabase) {
+
+    # Replaces the file atomically when both files are on the same volume.
+    $previousZipDatabase = Join-Path `
+        $dataDirectory `
+        ".zipcodes.$([guid]::NewGuid().ToString('N')).bak"
+
+    [System.IO.File]::Replace(
+        $temporaryZipDatabase,
+        $zipDatabase,
+        $previousZipDatabase
+    )
+}
+else {
+
+    Move-Item `
+        -Path $temporaryZipDatabase `
+        -Destination $zipDatabase
+}
+
+$temporaryZipDatabase = $null
 
 if (-not (Test-Path $zipDatabase)) {
 
-    throw "The ZIP database was not created successfully."
+    throw "The ZIP database was not replaced successfully."
 }
 
 $fileInfo = Get-Item $zipDatabase
 
-# ------------------------------------------------------------
-# Cleanup
-# ------------------------------------------------------------
+}
+finally {
 
-Remove-Item `
-    $tempDirectory `
-    -Recurse `
-    -Force
+    # --------------------------------------------------------
+    # Cleanup
+    # --------------------------------------------------------
+
+    if ($temporaryZipDatabase -and (Test-Path $temporaryZipDatabase)) {
+
+        Remove-Item `
+            -Path $temporaryZipDatabase `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+
+    if ($previousZipDatabase -and (Test-Path $previousZipDatabase)) {
+
+        Remove-Item `
+            -Path $previousZipDatabase `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+
+    if ($tempDirectory -and (Test-Path $tempDirectory)) {
+
+        Remove-Item `
+            -Path $tempDirectory `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+}
 
 # ------------------------------------------------------------
 # Done
