@@ -9,46 +9,18 @@ $ErrorActionPreference = "Stop"
 
 
 # ------------------------------------------------------------
-# Configuration
+# Load configuration
 # ------------------------------------------------------------
 
-$toolRoot = Split-Path $PSScriptRoot -Parent
+$configFile = Join-Path `
+    $PSScriptRoot `
+    "Config.ps1"
 
-$binDirectory = $PSScriptRoot
+if (-not (Test-Path $configFile)) {
+    throw "Could not find Config.ps1 at: $configFile"
+}
 
-$currentServiceUrl = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
-
-$historicalServiceUrl = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters/FeatureServer/0/query"
-
-$downloader = Join-Path `
-    $binDirectory `
-    "Get-FireKML.ps1"
-
-$zipDatabase = Join-Path `
-    $toolRoot `
-    "Data\zipcodes.csv"
-
-$zipDatabaseMaxAgeDays = 90
-
-# Enable historical perimeter selection.
-#
-# $true  = offer current and historical perimeter options (this feature is WIP and doesn't always work as intended)
-# $false = always download the most recent perimeter
-$makeHistoryAvailable = $false
-
-# Fields used by current NIFC searches.
-$outFields = @(
-    "OBJECTID",
-    "poly_IncidentName",
-    "poly_GISAcres",
-    "attr_PercentContained",
-    "poly_PolygonDateTime",
-    "poly_MapMethod",
-    "poly_Source",
-    "attr_UniqueFireIdentifier",
-    "poly_IRWINID",
-    "attr_POOState"
-) -join ","
+. $configFile
 
 
 # ------------------------------------------------------------
@@ -75,6 +47,33 @@ if (-not (Test-Path $zipFunctions)) {
 
 . $nifcFunctions
 . $zipFunctions
+
+
+# ------------------------------------------------------------
+# Ensure required directories exist
+# ------------------------------------------------------------
+
+function Initialize-Directories {
+
+    $directories = @(
+        $dataDirectory
+        $outputDirectory
+    )
+
+    foreach ($directory in $directories) {
+
+        if (-not (Test-Path $directory)) {
+
+            New-Item `
+                -ItemType Directory `
+                -Path $directory `
+                -Force |
+                Out-Null
+        }
+    }
+}
+
+Initialize-Directories
 
 
 # ------------------------------------------------------------

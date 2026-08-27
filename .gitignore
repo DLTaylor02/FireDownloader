@@ -1,11 +1,7 @@
-# Local/generated data
-Data/zipcodes.csv
+# Runtime/generated data
+Data/
 Output/
 
-# PowerShell/editor files
+# Temporary files
 *.tmp
 *.bak
-
-# OS files
-.DS_Store
-Thumbs.db

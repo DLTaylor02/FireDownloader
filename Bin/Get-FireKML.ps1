@@ -1,25 +1,74 @@
+# Get-FireKML.ps1
+#
+# Downloads a NIFC/WFIGS fire perimeter by OBJECTID
+# and converts it to a Google Earth KMZ.
+#
+# Default:
+#   Current WFIGS perimeter
+#
+# -Historical:
+#   Historical WFIGS perimeter
+
 param (
     [Parameter(Mandatory)]
     [int]$ObjectId,
 
-    [string]$OutputDirectory = ".\Output"
+    [switch]$Historical,
+
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
 
-# ------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------
-
-$serviceUrl = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
 
 # ------------------------------------------------------------
-# Prepare output directory
+# Load configuration
 # ------------------------------------------------------------
+
+$configFile = Join-Path `
+    $PSScriptRoot `
+    "Config.ps1"
+
+if (-not (Test-Path $configFile)) {
+
+    throw "Could not find Config.ps1 at: $configFile"
+}
+
+. $configFile
+
+
+# ------------------------------------------------------------
+# Determine service
+# ------------------------------------------------------------
+
+if ($Historical) {
+
+    $serviceUrl = $historicalServiceUrl
+}
+else {
+
+    $serviceUrl = $currentServiceUrl
+}
+
+
+# ------------------------------------------------------------
+# Determine output directory
+# ------------------------------------------------------------
+
+if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
+
+    $OutputDirectory = $outputDirectory
+}
 
 if (-not (Test-Path $OutputDirectory)) {
-    New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+
+    New-Item `
+        -ItemType Directory `
+        -Path $OutputDirectory `
+        -Force |
+        Out-Null
 }
+
 
 # ------------------------------------------------------------
 # Query NIFC
@@ -43,19 +92,35 @@ $queryString = ($params.GetEnumerator() | ForEach-Object {
 
 $url = "$serviceUrl`?$queryString"
 
-$response = Invoke-RestMethod -Uri $url -Method Get
+$response = Invoke-RestMethod `
+    -Uri $url `
+    -Method Get
 
-if (-not $response.features -or $response.features.Count -eq 0) {
+
+# ------------------------------------------------------------
+# Validate response
+# ------------------------------------------------------------
+
+if (
+    -not $response.features -or
+    $response.features.Count -eq 0
+) {
+
     throw "No perimeter found for OBJECTID $ObjectId."
 }
 
 if ($response.features.Count -gt 1) {
-    Write-Warning "NIFC returned multiple features for OBJECTID $ObjectId."
+
+    Write-Warning `
+        "NIFC returned multiple features for OBJECTID $ObjectId."
 }
 
 $feature = $response.features[0]
+
 $properties = $feature.properties
+
 $geometry = $feature.geometry
+
 
 # ------------------------------------------------------------
 # Display fire information
@@ -63,14 +128,20 @@ $geometry = $feature.geometry
 
 $fireName = $properties.poly_IncidentName
 
-Write-Host "Fire:       $fireName"
-Write-Host "GIS Acres:  $($properties.poly_GISAcres)"
-Write-Host "Containment:$($properties.attr_PercentContained)%"
-Write-Host "Perimeter:  $($properties.poly_PolygonDateTime)"
-Write-Host "Map Method: $($properties.poly_MapMethod)"
-Write-Host "Source:     $($properties.poly_Source)"
-Write-Host "Incident ID:$($properties.attr_UniqueFireIdentifier)"
+if ([string]::IsNullOrWhiteSpace($fireName)) {
+
+    $fireName = "Unknown Fire"
+}
+
+Write-Host "Fire:        $fireName"
+Write-Host "GIS Acres:   $($properties.poly_GISAcres)"
+Write-Host "Containment: $($properties.attr_PercentContained)%"
+Write-Host "Perimeter:   $($properties.poly_PolygonDateTime)"
+Write-Host "Map Method:  $($properties.poly_MapMethod)"
+Write-Host "Source:      $($properties.poly_Source)"
+Write-Host "Incident ID: $($properties.attr_UniqueFireIdentifier)"
 Write-Host ""
+
 
 # ------------------------------------------------------------
 # Convert GeoJSON ring to KML coordinates
@@ -82,10 +153,17 @@ function Convert-CoordinateRingToKml {
         $Ring
     )
 
+    # GeoJSON:
+    #   longitude, latitude
+    #
+    # KML:
+    #   longitude, latitude, altitude
+
     return (($Ring | ForEach-Object {
         "$($_[0]),$($_[1]),0"
     }) -join " ")
 }
+
 
 # ------------------------------------------------------------
 # Normalize Polygon / MultiPolygon
@@ -96,19 +174,24 @@ $polygons = @()
 switch ($geometry.type) {
 
     "Polygon" {
+
         $polygons += ,$geometry.coordinates
     }
 
     "MultiPolygon" {
+
         foreach ($polygon in $geometry.coordinates) {
+
             $polygons += ,$polygon
         }
     }
 
     default {
+
         throw "Unexpected geometry type: $($geometry.type)"
     }
 }
+
 
 # ------------------------------------------------------------
 # Generate KML polygons
@@ -118,7 +201,8 @@ $placemarkParts = @()
 
 foreach ($polygon in $polygons) {
 
-    $outerRing = Convert-CoordinateRingToKml -Ring $polygon[0]
+    $outerRing = Convert-CoordinateRingToKml `
+        -Ring $polygon[0]
 
     $innerRings = ""
 
@@ -126,7 +210,8 @@ foreach ($polygon in $polygons) {
 
         foreach ($hole in $polygon[1..($polygon.Count - 1)]) {
 
-            $holeCoordinates = Convert-CoordinateRingToKml -Ring $hole
+            $holeCoordinates = Convert-CoordinateRingToKml `
+                -Ring $hole
 
             $innerRings += @"
                 <innerBoundaryIs>
@@ -140,6 +225,7 @@ foreach ($polygon in $polygons) {
 
     $placemarkParts += @"
         <Placemark>
+
             <name>$fireName</name>
 
             <description><![CDATA[
@@ -151,9 +237,12 @@ foreach ($polygon in $polygons) {
                 <b>Source:</b> $($properties.poly_Source)<br>
                 <b>Incident ID:</b> $($properties.attr_UniqueFireIdentifier)<br>
                 <b>IRWIN ID:</b> $($properties.poly_IRWINID)<br>
+                <b>Historical:</b> $Historical<br>
+                <b>Retrieved:</b> $(Get-Date)<br>
             ]]></description>
 
             <Style>
+
                 <LineStyle>
                     <color>ff0000ff</color>
                     <width>3</width>
@@ -164,14 +253,17 @@ foreach ($polygon in $polygons) {
                     <fill>1</fill>
                     <outline>1</outline>
                 </PolyStyle>
+
             </Style>
 
             <Polygon>
 
                 <outerBoundaryIs>
+
                     <LinearRing>
                         <coordinates>$outerRing</coordinates>
                     </LinearRing>
+
                 </outerBoundaryIs>
 
 $innerRings
@@ -181,6 +273,7 @@ $innerRings
         </Placemark>
 "@
 }
+
 
 # ------------------------------------------------------------
 # Build KML
@@ -214,11 +307,17 @@ $($placemarkParts -join "`n")
 </kml>
 "@
 
+
 # ------------------------------------------------------------
 # Create temporary KML
 # ------------------------------------------------------------
 
-$tempKml = Join-Path $env:TEMP "BugFire_$timestamp.kml"
+$safeFireName = $fireName -replace '[\\/:*?"<>|]', '_'
+
+$tempKml = Join-Path `
+    $env:TEMP `
+    "${safeFireName}_${timestamp}.kml"
+
 
 [System.IO.File]::WriteAllText(
     $tempKml,
@@ -226,41 +325,61 @@ $tempKml = Join-Path $env:TEMP "BugFire_$timestamp.kml"
     [System.Text.UTF8Encoding]::new($false)
 )
 
+
 # ------------------------------------------------------------
 # Package as KMZ
 # ------------------------------------------------------------
 
-$tempDir = Join-Path $env:TEMP "FireKMZ_$timestamp"
-$tempZip = Join-Path $env:TEMP "$fireName`_$timestamp.zip"
+$tempDir = Join-Path `
+    $env:TEMP `
+    "FireKMZ_$([guid]::NewGuid().ToString())"
 
-$safeFireName = $fireName -replace '[\\/:*?"<>|]', '_'
+$tempZip = Join-Path `
+    $env:TEMP `
+    "${safeFireName}_${timestamp}.zip"
 
 $outputKmz = Join-Path `
     $OutputDirectory `
-    "${safeFireName}_$timestamp.kmz"
+    "${safeFireName}_${timestamp}.kmz"
 
-New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+New-Item `
+    -ItemType Directory `
+    -Path $tempDir `
+    -Force |
+    Out-Null
+
 
 Copy-Item `
     $tempKml `
     (Join-Path $tempDir "doc.kml")
+
 
 Compress-Archive `
     -Path (Join-Path $tempDir "doc.kml") `
     -DestinationPath $tempZip `
     -Force
 
+
 Move-Item `
     $tempZip `
     $outputKmz `
     -Force
 
+
 # ------------------------------------------------------------
 # Cleanup
 # ------------------------------------------------------------
 
-Remove-Item $tempKml -Force
-Remove-Item $tempDir -Recurse -Force
+Remove-Item `
+    $tempKml `
+    -Force
+
+Remove-Item `
+    $tempDir `
+    -Recurse `
+    -Force
+
 
 # ------------------------------------------------------------
 # Done
@@ -270,6 +389,20 @@ Write-Host ""
 Write-Host "========================================"
 Write-Host "Download complete!"
 Write-Host "========================================"
+Write-Host ""
+Write-Host "Fire:"
+Write-Host "  $fireName"
+Write-Host ""
+
+if ($Historical) {
+    Write-Host "Perimeter:"
+    Write-Host "  Historical"
+}
+else {
+    Write-Host "Perimeter:"
+    Write-Host "  Current"
+}
+
 Write-Host ""
 Write-Host "Output:"
 Write-Host "  $outputKmz"

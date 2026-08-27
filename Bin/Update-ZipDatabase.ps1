@@ -16,19 +16,15 @@
 
 $ErrorActionPreference = "Stop"
 
-# ------------------------------------------------------------
-# Configuration
-# ------------------------------------------------------------
+$configFile = Join-Path `
+    $PSScriptRoot `
+    "Config.ps1"
 
-$dataDirectory = Join-Path `
-    (Split-Path $PSScriptRoot -Parent) `
-    "Data"
+if (-not (Test-Path $configFile)) {
+    throw "Could not find Config.ps1 at: $configFile"
+}
 
-$outputFile = Join-Path `
-    $dataDirectory `
-    "zipcodes.csv"
-
-$downloadUrl = "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2025_Gazetteer/2025_Gaz_zcta_national.zip"
+. $configFile
 
 # ------------------------------------------------------------
 # Prepare working directory
@@ -77,13 +73,13 @@ Write-Host ""
 Write-Host "Downloading Census ZCTA database..."
 Write-Host ""
 Write-Host "Source:"
-Write-Host $downloadUrl
+Write-Host $zipDatabaseDownloadUrl
 Write-Host ""
 
 try {
 
     Invoke-WebRequest `
-        -Uri $downloadUrl `
+        -Uri $zipDatabaseDownloadUrl `
         -OutFile $tempZip
 }
 catch {
@@ -188,7 +184,7 @@ $zipRecords |
         [int]$_.ZIP
     } |
     Export-Csv `
-        -Path $outputFile `
+        -Path $zipDatabase `
         -NoTypeInformation `
         -Encoding UTF8
 
@@ -196,12 +192,12 @@ $zipRecords |
 # Validate output
 # ------------------------------------------------------------
 
-if (-not (Test-Path $outputFile)) {
+if (-not (Test-Path $zipDatabase)) {
 
     throw "The ZIP database was not created successfully."
 }
 
-$fileInfo = Get-Item $outputFile
+$fileInfo = Get-Item $zipDatabase
 
 # ------------------------------------------------------------
 # Cleanup
@@ -222,7 +218,7 @@ Write-Host " ZIP database updated!"
 Write-Host "========================================"
 Write-Host ""
 Write-Host "Records:   $($zipRecords.Count)"
-Write-Host "File:      $outputFile"
+Write-Host "File:      $zipDatabase"
 Write-Host "Size:      $([math]::Round($fileInfo.Length / 1KB, 1)) KB"
 Write-Host "Updated:   $($fileInfo.LastWriteTime)"
 Write-Host ""
