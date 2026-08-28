@@ -6,15 +6,20 @@ It also maintains a local cache of ZIP code coordinates and automatically refres
 
 ## Getting Started
 
-Open PowerShell and execute:
+1. Open PowerShell and execute:
 
 ```powershell
 .\Find_Fire.ps1
 ```
 
-The interactive tool will guide you through searching for fires and downloading their perimeters.
+2. The interactive tool will guide you through searching for fires and downloading their perimeters.
+   Downloaded `.kmz` files are placed in the `Output` folder.
 
-Downloaded `.kmz` files are placed in the `Output` folder.
+3. Go to Google Earth. https://earth.google.com/web
+
+4. Click File > Open local KML file
+
+5. Navigate to your file.
 
 ## Features
 
